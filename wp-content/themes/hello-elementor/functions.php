@@ -289,27 +289,13 @@ add_filter('script_loader_tag', function ($tag, $handle) {
 
 
 add_action('wp_enqueue_scripts', function () {
-  if (!is_front_page()) {
-    wp_dequeue_style('elementor-frontend');
-  }
+
+    if (!is_singular() || !\Elementor\Plugin::$instance->documents->get(get_the_ID())->is_built_with_elementor()) {
+        wp_dequeue_style('elementor-frontend');
+        wp_dequeue_script('elementor-frontend');
+    }
+
 }, 99);
-
-
-add_filter('script_loader_tag', function ($tag, $handle) {
-    if (strpos($tag, 'nomodule') !== false) {
-        return '';
-    }
-    return $tag;
-}, 10, 2);
-
-
-add_filter('wp_get_attachment_image_attributes', function ($attr) {
-    if (empty($attr['width']) || empty($attr['height'])) {
-        $attr['width'] = '1200';
-        $attr['height'] = '600';
-    }
-    return $attr;
-});
 
 
 add_filter('script_loader_tag', function ($tag, $handle) {
@@ -329,3 +315,98 @@ add_filter('script_loader_tag', function ($tag, $handle) {
     return str_replace(' src', ' defer src', $tag);
 
 }, 10, 2);
+
+
+// Task 4: Security & Edge Case Handling – Practical Implementation
+
+add_shortcode( 'secure_search_form', 'secure_search_form_shortcode' );
+
+function secure_search_form_shortcode() {
+    ob_start();
+    ?>
+    <form id="secure-search-form">
+        <?php wp_nonce_field( 'secure_search_action', 'secure_search_nonce' ); ?>
+
+        <input type="text" id="search_keyword" placeholder="Enter keyword">
+        <button type="submit">Search</button>
+    </form>
+
+    <div id="search-results"></div>
+    <?php
+    return ob_get_clean();
+}
+
+
+add_action( 'wp_ajax_secure_search', 'secure_search_handler' );
+add_action( 'wp_ajax_nopriv_secure_search', 'secure_search_handler' );
+
+function secure_search_handler() {
+
+    if ( ! isset( $_POST['nonce'] ) ) {
+        wp_send_json_error( 'Missing security token' );
+    }
+
+    
+    if ( ! check_ajax_referer( 'secure_search_action', 'nonce', false ) ) {
+        wp_send_json_error( 'Invalid security token' );
+    }
+
+    $keyword = isset( $_POST['keyword'] )
+        ? sanitize_text_field( $_POST['keyword'] )
+        : '';
+
+    if ( empty( $keyword ) ) {
+        wp_send_json_error( 'Keyword is required' );
+    }
+
+    $query = new WP_Query([
+        'post_type'      => 'post',
+        's'              => $keyword,
+        'posts_per_page' => 5,
+    ]);
+
+    if ( ! $query->have_posts() ) {
+        wp_send_json_error( 'No posts found' );
+    }
+
+    $output = '';
+
+    while ( $query->have_posts() ) {
+        $query->the_post();
+        $output .= '<p>' . esc_html( get_the_title() ) . '</p>';
+    }
+
+    wp_reset_postdata();
+
+    wp_send_json_success( $output );
+}
+
+
+add_action( 'wp_footer', 'secure_search_inline_js' );
+
+function secure_search_inline_js() {
+    ?>
+    <script>
+    jQuery(function ($) {
+
+        $('#secure-search-form').on('submit', function (e) {
+            e.preventDefault();
+
+            $.ajax({
+                url: '<?php echo esc_url( admin_url( "admin-ajax.php" ) ); ?>',
+                type: 'POST',
+                data: {
+                    action: 'secure_search',
+                    keyword: $('#search_keyword').val(),
+                    nonce: $('[name="secure_search_nonce"]').val()
+                },
+                success: function (response) {
+                    $('#search-results').html(response.data);
+                }
+            });
+        });
+
+    });
+    </script>
+    <?php
+}
