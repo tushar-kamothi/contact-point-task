@@ -279,15 +279,6 @@ HelloTheme\Theme::instance();
 //   $wpdb->get_results("SELECT * FROM $wpdb->posts");
 // });
 
-
-add_filter('script_loader_tag', function ($tag, $handle) {
-  if (!is_admin()) {
-    return str_replace(' src', ' defer src', $tag);
-  }
-  return $tag;
-}, 10, 2);
-
-
 add_action('wp_enqueue_scripts', function () {
 
     if (!is_singular() || !\Elementor\Plugin::$instance->documents->get(get_the_ID())->is_built_with_elementor()) {
@@ -297,24 +288,30 @@ add_action('wp_enqueue_scripts', function () {
 
 }, 99);
 
+add_filter( 'script_loader_tag', 'custom_defer_scripts', 10, 3 );
 
-add_filter('script_loader_tag', function ($tag, $handle) {
+function custom_defer_scripts( $tag, $handle, $src ) {
+
+    if ( is_admin() ) {
+        return $tag;
+    }
 
     // Scripts that must NOT be deferred
     $exclude = [
+        'jquery',
         'jquery-core',
         'jquery-migrate',
         'elementor-frontend',
         'elementor-pro-frontend'
     ];
 
-    if (is_admin() || in_array($handle, $exclude)) {
+    if ( in_array( $handle, $exclude, true ) ) {
         return $tag;
     }
 
-    return str_replace(' src', ' defer src', $tag);
+    return '<script src="' . esc_url( $src ) . '" defer></script>';
+}
 
-}, 10, 2);
 
 
 // Task 4: Security & Edge Case Handling – Practical Implementation
