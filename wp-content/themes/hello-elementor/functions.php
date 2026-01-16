@@ -271,3 +271,61 @@ if ( ! function_exists( 'hello_elementor_body_open' ) ) {
 require HELLO_THEME_PATH . '/theme.php';
 
 HelloTheme\Theme::instance();
+
+
+
+// add_action('wp_footer', function () {
+//   global $wpdb;
+//   $wpdb->get_results("SELECT * FROM $wpdb->posts");
+// });
+
+
+add_filter('script_loader_tag', function ($tag, $handle) {
+  if (!is_admin()) {
+    return str_replace(' src', ' defer src', $tag);
+  }
+  return $tag;
+}, 10, 2);
+
+
+add_action('wp_enqueue_scripts', function () {
+  if (!is_front_page()) {
+    wp_dequeue_style('elementor-frontend');
+  }
+}, 99);
+
+
+add_filter('script_loader_tag', function ($tag, $handle) {
+    if (strpos($tag, 'nomodule') !== false) {
+        return '';
+    }
+    return $tag;
+}, 10, 2);
+
+
+add_filter('wp_get_attachment_image_attributes', function ($attr) {
+    if (empty($attr['width']) || empty($attr['height'])) {
+        $attr['width'] = '1200';
+        $attr['height'] = '600';
+    }
+    return $attr;
+});
+
+
+add_filter('script_loader_tag', function ($tag, $handle) {
+
+    // Scripts that must NOT be deferred
+    $exclude = [
+        'jquery-core',
+        'jquery-migrate',
+        'elementor-frontend',
+        'elementor-pro-frontend'
+    ];
+
+    if (is_admin() || in_array($handle, $exclude)) {
+        return $tag;
+    }
+
+    return str_replace(' src', ' defer src', $tag);
+
+}, 10, 2);
